@@ -39,15 +39,37 @@ Nio is a local AI chat interface implemented as a .NET project. It provides a de
 
 ![.NET](https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
 
+## 📋 Prerequisites
+
+Before running this application, you must have **Ollama** installed and running on your local machine to handle the AI chat services.
+
+1. **Install Ollama**: Download it from [ollama.com](https://ollama.com/).
+2. **Start Ollama**: Ensure the Ollama background service is running.
+3. **Prepare the Model**: This application uses a custom model named `nio` (based on Qwen 7B). Open your terminal and run:
+
+   ```bash
+   # Pull the base Qwen 7B model (if needed) and the custom nio model
+   ollama pull qwen:7b
+   ollama create nio -f Modelfile
+
+
 ## ⚡ Quick Start
 
 ```bash
 
 # 1. Clone the repository
-git clone https://github.com/Rashfox/Nio.git
+git clone [https://github.com/Rashfox/Nio-Chat-AI.git](https://github.com/Rashfox/Nio-Chat-AI.git)
 
-# Restore and run
-dotnet restore && dotnet run
+# 2. Navigate to the project directory
+cd Nio-Chat-AI
+
+# 3. Ensure Ollama is running with the 'nio' model ready
+# (See Prerequisites above)
+
+# 4. Restore dependencies and run the application
+dotnet restore
+dotnet run
+
 ```
 
 ## 🚀 Available Scripts
@@ -124,12 +146,4 @@ Please follow the existing code style and include tests for new behavior where a
 This project is licensed under the **MIT** License.
 
 ---
-
-<div align="center">
-
-[![Made with ReadmeBuddy](https://img.shields.io/badge/Made%20with-ReadmeBuddy-8B5CFF?style=for-the-badge&logo=markdown&logoColor=white)](https://readmebuddy.com)
-
-<sub>Generate beautiful READMEs in seconds → <a href="https://readmebuddy.com">readmebuddy.com</a></sub>
-
-</div>
 
