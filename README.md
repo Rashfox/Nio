@@ -2,7 +2,7 @@
 
 > A local AI chat application built with .NET and Blazor.
 
-![GitHub stars](https://img.shields.io/github/stars/Rashfox/Nio?style=for-the-badge&logo=github) ![GitHub forks](https://img.shields.io/github/forks/Rashfox/Nio?style=for-the-badge&logo=github) ![GitHub issues](https://img.shields.io/github/issues/Rashfox/Nio?style=for-the-badge&logo=github) ![Last commit](https://img.shields.io/github/last-commit/Rashfox/Nio?style=for-the-badge&logo=github) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+![GitHub stars](https://img.shields.io/github/stars/Rashfox/Nio-Chat-AI?style=for-the-badge&logo=github) ![GitHub forks](https://img.shields.io/github/forks/Rashfox/Nio-Chat-AI?style=for-the-badge&logo=github) ![GitHub issues](https://img.shields.io/github/issues/Rashfox/Nio-Chat-AI?style=for-the-badge&logo=github) ![Last commit](https://img.shields.io/github/last-commit/Rashfox/Nio-Chat-AI?style=for-the-badge&logo=github) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 ## 📑 Table of Contents
 
@@ -49,7 +49,7 @@ Before running this application, you must have **Ollama** installed and running 
 
    ```bash
    # Pull the base Qwen 7B model (if needed) and the custom nio model
-   ollama pull qwen:7b
+   ollama pull qwen2.5:7b
    ollama create nio -f Modelfile
 
 
@@ -126,14 +126,14 @@ Thanks to everyone who has contributed to this project:
 <a href="https://github.com/Rashfox" title="Rashfox"><img src="https://avatars.githubusercontent.com/u/113658888?v=4&s=64" width="64" height="64" alt="Rashfox" style="border-radius:50%" /></a>
 </p>
 
-[See the full list of contributors →](https://github.com/Rashfox/Nio/graphs/contributors)
+[See the full list of contributors →](https://github.com/Rashfox/Nio-Chat-AI/graphs/contributors)
 
 ## 👥 Contributing
 
 Contributions are welcome! Here's the standard flow:
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/Rashfox/Nio.git`
+2. **Clone** your fork: `git clone https://github.com/Rashfox/Nio-Chat-AI.git`
 3. **Branch**: `git checkout -b feature/your-feature`
 4. **Commit**: `git commit -m 'feat: add some feature'`
 5. **Push**: `git push origin feature/your-feature`
