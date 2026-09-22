@@ -1,0 +1,361 @@
+﻿@page "/"
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components
+@using blazor.Services
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject OllamaChatService ChatService
+
+<PageTitle>Nio Chat</PageTitle>
+
+<div class="chat-shell @(isDarkMode ? "dark-mode" : "")">
+	@if (sidebarOpen)
+	{
+		<div class="sidebar-backdrop" @onclick="ToggleSidebar"></div>
+	}
+	<aside class="chat-sidebar @(sidebarOpen ? "sidebar-open" : "")">
+		<div class="sidebar-header">
+			<strong>Riwayat chat</strong>
+			<button class="sidebar-close" type="button" @onclick="ToggleSidebar" aria-label="Tutup menu">×</button>
+		</div>
+		<button class="sidebar-new-chat" type="button" @onclick="StartNewChat">+ Chat baru</button>
+		<div class="session-list">
+			@if (sessions.Count == 0)
+			{
+				<div class="session-empty">Belum ada percakapan.</div>
+			}
+			@foreach (var session in sessions.OrderByDescending(item => item.UpdatedAt))
+			{
+				<button class="session-item @(session.Id == activeSessionId ? "session-active" : "")" type="button" @onclick="() => SelectSession(session.Id)">
+					<span class="session-icon">◌</span>
+					<span class="session-title">@session.Title</span>
+				</button>
+			}
+		</div>
+	</aside>
+	<header class="chat-header">
+		<div class="brand-lockup">
+			<button class="menu-button" type="button" @onclick="ToggleSidebar" aria-label="Buka riwayat chat">☰</button>
+			<div class="brand-mark">O</div>
+			<div>
+				<div class="eyebrow">LOCAL INTELLIGENCE</div>
+				<h1>Nio Chat</h1>
+			</div>
+		</div>
+		<div class="header-actions">
+			<span class="model-pill"><span class="status-dot"></span>@modelName</span>
+			@if (activeSession is not null)
+			{
+				<button class="session-name-button" type="button" @onclick="BeginRenameSession" title="Edit nama percakapan">@activeSession.Title</button>
+			}
+			<button class="theme-toggle" type="button" @onclick="ToggleTheme" aria-label="Ganti tema">@(isDarkMode ? "Light" : "Dark")</button>
+		</div>
+	</header>
+
+	@if (isRenaming && activeSession is not null)
+	{
+		<div class="rename-row">
+			<input @bind="renameValue" @onkeydown="HandleRenameKeyDown" aria-label="Nama percakapan" />
+			<button type="button" @onclick="SaveSessionName">Simpan</button>
+		</div>
+	}
+
+	<main class="conversation" @ref="conversationElement">
+		@if (messages.Count == 0)
+		{
+			<section class="welcome-panel">
+				<span class="welcome-kicker">PRIVATE. FAST. YOURS.</span>
+				<h2>Ngobrol dengan model AI<br />yang berjalan di mesinmu.</h2>
+				<p>Ajukan pertanyaan, minta ide, atau jelajahi sesuatu yang baru. Percakapanmu tetap lokal melalui Nio.</p>
+				<div class="prompt-grid">
+                    @foreach (var prompt in activePrompts)
+                    {
+                        <button type="button" @onclick="() => UsePrompt(prompt.Prompt)">@prompt.Title <span>-></span></button>
+                    }
+                    <!-- Opsional: Tombol untuk mengacak ulang rekomendasi -->
+                    <button type="button" class="refresh-prompt" @onclick="ShufflePrompts" title="Acak rekomendasi" style="border-radius: 50%; padding: 10px; width: 38px; display: flex; align-items: center; justify-content: center;">↻</button>
+                </div>
+			</section>
+		}
+		else
+		{
+			@foreach (var message in messages)
+			{
+				<article class="message @(message.Role == "user" ? "message-user" : "message-assistant")">
+					<div class="message-label">@(message.Role == "user" ? "KAMU" : "NIO")</div>
+					<div class="message-content">@message.Content</div>
+				</article>
+			}
+		}
+		@if (isSending)
+		{
+			<div class="message message-assistant typing-message">
+				<div class="message-label">NIO</div>
+				<div class="typing"><span></span><span></span><span></span></div>
+			</div>
+		}
+	</main>
+
+	<footer class="composer-area">
+		@if (!string.IsNullOrWhiteSpace(errorMessage))
+		{
+			<div class="error-note">@errorMessage</div>
+		}
+		<div class="composer">
+			<textarea @ref="composerInput" @bind="draft" @bind:event="oninput" @onkeydown="HandleComposerKeyDown" placeholder="Tulis pesan untuk Nio..." rows="1" disabled="@isSending"></textarea>
+			<button class="send-button" type="button" @onclick="SendMessage" disabled="@(isSending || string.IsNullOrWhiteSpace(draft))" aria-label="Kirim pesan">↑</button>
+		</div>
+		<div class="composer-meta"><span>Enter untuk mengirim</span><span>@(hasSavedHistory ? "Riwayat tersimpan" : "Nio berjalan lokal")</span></div>
+	</footer>
+</div>
+
+@code {
+	private readonly List<ChatMessage> messages = [];
+	private readonly List<ChatSession> sessions = [];
+	private string draft = string.Empty;
+	private string modelName = "nio";
+	private string? errorMessage;
+	private bool isDarkMode;
+	private bool isSending;
+	private bool hasSavedHistory;
+	private bool sidebarOpen;
+	private bool isRenaming;
+	private bool shouldScrollToLatest;
+	private string renameValue = string.Empty;
+	private string? activeSessionId;
+	private ElementReference conversationElement;
+	private ElementReference composerInput;
+	private ChatSession? activeSession => sessions.FirstOrDefault(session => session.Id == activeSessionId);
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			var savedSessions = await JS.InvokeAsync<ChatSession[]?>("chatStorage.load");
+			if (savedSessions is { Length: > 0 })
+			{
+				sessions.AddRange(savedSessions);
+			}
+
+			CreateEmptySession();
+			StateHasChanged();
+		}
+
+		if (shouldScrollToLatest)
+		{
+			shouldScrollToLatest = false;
+			await JS.InvokeVoidAsync("chatStorage.scrollToLatest", conversationElement);
+		}
+	}
+
+	private async Task SendMessage()
+	{
+		if (isSending)
+		{
+			return;
+		}
+
+		var content = draft.Trim();
+		if (string.IsNullOrWhiteSpace(content) || isSending)
+		{
+			return;
+		}
+
+		isSending = true;
+
+		if (activeSession is null)
+		{
+			CreateSession(content);
+		}
+
+		messages.Add(new ChatMessage("user", content));
+		shouldScrollToLatest = true;
+		UpdateSessionFromMessages();
+		await SaveHistory();
+		draft = string.Empty;
+		errorMessage = null;
+		await InvokeAsync(StateHasChanged);
+
+		try
+		{
+			var ollamaMessages = messages
+				.Select(message => new OllamaChatMessage(message.Role, message.Content))
+				.ToArray();
+			var assistantMessage = await ChatService.SendAsync(ollamaMessages);
+			messages.Add(new ChatMessage("assistant", assistantMessage));
+			shouldScrollToLatest = true;
+			UpdateSessionFromMessages();
+			await SaveHistory();
+		}
+		catch (HttpRequestException)
+		{
+			errorMessage = "Ollama belum berjalan. Jalankan Ollama di http://localhost:11434 lalu coba lagi.";
+		}
+		catch (OllamaException exception)
+		{
+			errorMessage = exception.Message;
+		}
+		finally
+		{
+			isSending = false;
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+
+	private void UsePrompt(string prompt)
+	{
+		draft = prompt;
+	}
+
+	private async Task HandleComposerKeyDown(KeyboardEventArgs args)
+	{
+		if (args.Key == "Enter" && !args.ShiftKey)
+		{
+			await SendMessage();
+		}
+	}
+
+	// 1. Tambahkan list rekomendasi
+    private List<ChatPrompt> activePrompts = [];
+    private readonly List<ChatPrompt> availablePrompts = [
+        new("Rencana belajar C#", "Buatkan rencana belajar C# selama 30 hari dari dasar"),
+        new("Jelaskan async / await", "Jelaskan konsep async dan await dengan contoh sederhana"),
+        new("Brainstorm ide produk", "Bantu saya melakukan brainstorming ide produk digital"),
+        new("Review kode", "Bantu saya mereview kode ini dan berikan saran perbaikan:\n\n"),
+        new("Optimasi SQL", "Bagaimana cara mengoptimasi query database SQL yang lambat?"),
+        new("Belajar Blazor", "Jelaskan cara kerja komponen di Blazor WebAssembly")
+    ];
+
+    // 2. Acak prompt saat aplikasi pertama kali dimuat
+    protected override void OnInitialized()
+    {
+        ShufflePrompts();
+    }
+
+    // 3. Method untuk mengacak 3 prompt
+    private void ShufflePrompts()
+    {
+        activePrompts = availablePrompts.OrderBy(_ => Guid.NewGuid()).Take(3).ToList();
+    }
+
+	private void ToggleTheme()
+	{
+		isDarkMode = !isDarkMode;
+	}
+
+	private async Task StartNewChat()
+	{
+		if (isSending)
+		{
+			return;
+		}
+
+		messages.Clear();
+		draft = string.Empty;
+		errorMessage = null;
+		hasSavedHistory = false;
+		activeSessionId = null;
+		isRenaming = false;
+		sidebarOpen = false;
+		await SaveHistory();
+	}
+
+	private async Task SaveHistory()
+	{
+		hasSavedHistory = messages.Count > 0;
+		await JS.InvokeVoidAsync("chatStorage.save", sessions);
+	}
+
+	private void CreateSession(string firstMessage)
+	{
+		var session = new ChatSession(Guid.NewGuid().ToString(), CreateTitle(firstMessage), DateTimeOffset.UtcNow, []);
+		sessions.Add(session);
+		activeSessionId = session.Id;
+	}
+
+	private void CreateEmptySession()
+	{
+		var session = new ChatSession(Guid.NewGuid().ToString(), "Percakapan baru", DateTimeOffset.UtcNow, []);
+		sessions.Add(session);
+		activeSessionId = session.Id;
+		messages.Clear();
+		hasSavedHistory = false;
+	}
+
+	private void UpdateSessionFromMessages()
+	{
+		if (activeSession is null)
+		{
+			return;
+		}
+
+		activeSession.Messages.Clear();
+		activeSession.Messages.AddRange(messages);
+		activeSession.UpdatedAt = DateTimeOffset.UtcNow;
+		if (activeSession.Title == "Percakapan baru" && messages.Count > 0)
+		{
+			activeSession.Title = CreateTitle(messages[0].Content);
+		}
+	}
+
+	private void SelectSession(string sessionId)
+	{
+		var session = sessions.FirstOrDefault(item => item.Id == sessionId);
+		if (session is null)
+		{
+			return;
+		}
+
+		activeSessionId = session.Id;
+		messages.Clear();
+		messages.AddRange(session.Messages);
+		shouldScrollToLatest = true;
+		hasSavedHistory = messages.Count > 0;
+		sidebarOpen = false;
+		isRenaming = false;
+	}
+
+	private void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+
+	private void BeginRenameSession()
+	{
+		if (activeSession is null) return;
+		 renameValue = activeSession.Title;
+		isRenaming = true;
+	}
+
+	private async Task SaveSessionName()
+	{
+		if (activeSession is null || string.IsNullOrWhiteSpace(renameValue)) return;
+		activeSession.Title = renameValue.Trim();
+		isRenaming = false;
+		await SaveHistory();
+	}
+
+	private async Task HandleRenameKeyDown(KeyboardEventArgs args)
+	{
+		if (args.Key == "Enter") await SaveSessionName();
+	}
+
+	public ValueTask DisposeAsync()
+	{
+		return ValueTask.CompletedTask;
+	}
+
+	private static string CreateTitle(string content)
+	{
+		var title = content.Trim();
+		return title.Length > 42 ? title[..42] + "..." : title;
+	}
+
+	private sealed record ChatMessage(string Role, string Content);
+    private sealed record ChatPrompt(string Title, string Prompt);
+	private sealed class ChatSession(string id, string title, DateTimeOffset updatedAt, List<ChatMessage> messages)
+        
+	{
+		public string Id { get; } = id;
+		public string Title { get; set; } = title;
+		public DateTimeOffset UpdatedAt { get; set; } = updatedAt;
+		public List<ChatMessage> Messages { get; } = messages;
+	}
+}
